@@ -1,94 +1,83 @@
 package com.experiment.smartclicker;
 
 import android.app.Activity;
-import android.content.pm.PackageManager;
+import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import rikka.shizuku.Shizuku;
 
 public class MainActivity extends Activity {
 
-    private static final int REQ_CODE = 100;
+    private static final String SHIZUKU = "rikka.shizuku.Shizuku";
     private TextView log;
-    private Object permListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        try {
-            LinearLayout layout = new LinearLayout(this);
-            layout.setOrientation(LinearLayout.VERTICAL);
-            layout.setPadding(40, 40, 40, 40);
 
-            Button btnPing = new Button(this);
-            btnPing.setText("1. Check Shizuku");
-            btnPing.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    checkShizuku();
+        final SharedPreferences sp = getSharedPreferences("crash", MODE_PRIVATE);
+        final Thread.UncaughtExceptionHandler old =
+                Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread t, Throwable e) {
+                sp.edit().putString("last", Log.getStackTraceString(e)).commit();
+                if (old != null) {
+                    old.uncaughtException(t, e);
                 }
-            });
+            }
+        });
 
-            Button btnPerm = new Button(this);
-            btnPerm.setText("2. Request Permission");
-            btnPerm.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    requestPerm();
-                }
-            });
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(40, 40, 40, 40);
 
-            Button btnCmd = new Button(this);
-            btnCmd.setText("3. Run test command (id)");
-            btnCmd.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    runTest();
-                }
-            });
+        Button b1 = new Button(this);
+        b1.setText("1. Check Shizuku");
+        b1.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                checkShizuku();
+            }
+        });
 
-            log = new TextView(this);
-            log.setText("Log:\n");
-            ScrollView sv = new ScrollView(this);
-            sv.addView(log);
+        Button b2 = new Button(this);
+        b2.setText("2. Request Permission");
+        b2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                requestPerm();
+            }
+        });
 
-            layout.addView(btnPing);
-            layout.addView(btnPerm);
-            layout.addView(btnCmd);
-            layout.addView(sv);
-            setContentView(layout);
+        Button b3 = new Button(this);
+        b3.setText("3. Run test command (id)");
+        b3.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                runTest();
+            }
+        });
 
-            addListener();
-        } catch (Throwable t) {
-            TextView err = new TextView(this);
-            err.setText("CRASH: " + android.util.Log.getStackTraceString(t));
-            ScrollView sv2 = new ScrollView(this);
-            sv2.addView(err);
-            setContentView(sv2);
-        }
-    }
+        log = new TextView(this);
+        log.setText("Log:\n");
+        ScrollView sv = new ScrollView(this);
+        sv.addView(log);
 
-    private void addListener() {
-        try {
-            Shizuku.OnRequestPermissionResultListener l =
-                    new Shizuku.OnRequestPermissionResultListener() {
-                        @Override
-                        public void onRequestPermissionResult(int requestCode, int grantResult) {
-                            if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                                print("Permission GRANTED");
-                            } else {
-                                print("Permission DENIED");
-                            }
-                        }
-                    };
-            permListener = l;
-            Shizuku.addRequestPermissionResultListener(l);
-        } catch (Throwable t) {
-            print("Listener error: " + t);
+        layout.addView(b1);
+        layout.addView(b2);
+        layout.addView(b3);
+        layout.addView(sv);
+        setContentView(layout);
+
+        String last = sp.getString("last", null);
+        if (last != null) {
+            print("PICHLA CRASH:\n" + last);
+            sp.edit().remove("last").commit();
         }
     }
 
@@ -96,39 +85,44 @@ public class MainActivity extends Activity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                if (log != null) {
-                    log.append(s + "\n");
-                }
+                log.append(s + "\n");
             }
         });
     }
 
+    private Object call(String name, Class<?>[] types, Object[] args) throws Exception {
+        Class<?> c = Class.forName(SHIZUKU);
+        java.lang.reflect.Method m = c.getDeclaredMethod(name, types);
+        m.setAccessible(true);
+        return m.invoke(null, args);
+    }
+
     private void checkShizuku() {
         try {
-            if (Shizuku.pingBinder()) {
-                print("Shizuku running. Version: " + Shizuku.getVersion()
-                        + ", uid: " + Shizuku.getUid());
+            Object ping = call("pingBinder", new Class<?>[0], new Object[0]);
+            if (Boolean.TRUE.equals(ping)) {
+                Object ver = call("getVersion", new Class<?>[0], new Object[0]);
+                Object uid = call("getUid", new Class<?>[0], new Object[0]);
+                print("Shizuku running. Version: " + ver + ", uid: " + uid);
             } else {
-                print("Shizuku NOT running. Shizuku app kholo aur Start karo.");
+                print("Shizuku NOT running.");
             }
         } catch (Throwable t) {
-            print("Check error: " + t);
+            print("Check error: " + Log.getStackTraceString(t));
         }
     }
 
     private void requestPerm() {
         try {
-            if (!Shizuku.pingBinder()) {
-                print("Pehle Shizuku start karo.");
-                return;
-            }
-            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+            Object g = call("checkSelfPermission", new Class<?>[0], new Object[0]);
+            if (((Integer) g).intValue() == 0) {
                 print("Permission already GRANTED");
             } else {
-                Shizuku.requestPermission(REQ_CODE);
+                call("requestPermission", new Class<?>[]{int.class}, new Object[]{100});
+                print("Popup bheja. Allow karke button 2 dobara dabao.");
             }
         } catch (Throwable t) {
-            print("Permission error: " + t);
+            print("Permission error: " + Log.getStackTraceString(t));
         }
     }
 
@@ -137,11 +131,9 @@ public class MainActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    java.lang.reflect.Method m = Shizuku.class.getDeclaredMethod(
-                            "newProcess", String[].class, String[].class, String.class);
-                    m.setAccessible(true);
-                    Object proc = m.invoke(null,
-                            new String[]{"sh", "-c", "id"}, null, null);
+                    Object proc = call("newProcess",
+                            new Class<?>[]{String[].class, String[].class, String.class},
+                            new Object[]{new String[]{"sh", "-c", "id"}, null, null});
                     java.lang.Process p = (java.lang.Process) proc;
                     java.io.BufferedReader r = new java.io.BufferedReader(
                             new java.io.InputStreamReader(p.getInputStream()));
@@ -152,22 +144,9 @@ public class MainActivity extends Activity {
                     p.waitFor();
                     print("Command done");
                 } catch (Throwable t) {
-                    print("Command error: " + t);
+                    print("Command error: " + Log.getStackTraceString(t));
                 }
             }
         }).start();
     }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        try {
-            if (permListener != null) {
-                Shizuku.removeRequestPermissionResultListener(
-                        (Shizuku.OnRequestPermissionResultListener) permListener);
             }
-        } catch (Throwable t) {
-            // ignore
-        }
-    }
-                }
