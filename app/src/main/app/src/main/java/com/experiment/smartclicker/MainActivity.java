@@ -14,67 +14,79 @@ public class MainActivity extends Activity {
 
     private static final int REQ_CODE = 100;
     private TextView log;
-
-    private final Shizuku.OnRequestPermissionResultListener permListener =
-            new Shizuku.OnRequestPermissionResultListener() {
-                @Override
-                public void onRequestPermissionResult(int requestCode, int grantResult) {
-                    if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                        print("Permission GRANTED");
-                    } else {
-                        print("Permission DENIED");
-                    }
-                }
-            };
+    private Object permListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(40, 40, 40, 40);
-
-        Button btnPing = new Button(this);
-        btnPing.setText("1. Check Shizuku");
-        btnPing.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                checkShizuku();
-            }
-        });
-
-        Button btnPerm = new Button(this);
-        btnPerm.setText("2. Request Permission");
-        btnPerm.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                requestPerm();
-            }
-        });
-
-        Button btnCmd = new Button(this);
-        btnCmd.setText("3. Run test command (id)");
-        btnCmd.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                runTest();
-            }
-        });
-
-        log = new TextView(this);
-        log.setText("Log:\n");
-        ScrollView sv = new ScrollView(this);
-        sv.addView(log);
-
-        layout.addView(btnPing);
-        layout.addView(btnPerm);
-        layout.addView(btnCmd);
-        layout.addView(sv);
-        setContentView(layout);
-
         try {
-            Shizuku.addRequestPermissionResultListener(permListener);
+            LinearLayout layout = new LinearLayout(this);
+            layout.setOrientation(LinearLayout.VERTICAL);
+            layout.setPadding(40, 40, 40, 40);
+
+            Button btnPing = new Button(this);
+            btnPing.setText("1. Check Shizuku");
+            btnPing.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    checkShizuku();
+                }
+            });
+
+            Button btnPerm = new Button(this);
+            btnPerm.setText("2. Request Permission");
+            btnPerm.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    requestPerm();
+                }
+            });
+
+            Button btnCmd = new Button(this);
+            btnCmd.setText("3. Run test command (id)");
+            btnCmd.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    runTest();
+                }
+            });
+
+            log = new TextView(this);
+            log.setText("Log:\n");
+            ScrollView sv = new ScrollView(this);
+            sv.addView(log);
+
+            layout.addView(btnPing);
+            layout.addView(btnPerm);
+            layout.addView(btnCmd);
+            layout.addView(sv);
+            setContentView(layout);
+
+            addListener();
+        } catch (Throwable t) {
+            TextView err = new TextView(this);
+            err.setText("CRASH: " + android.util.Log.getStackTraceString(t));
+            ScrollView sv2 = new ScrollView(this);
+            sv2.addView(err);
+            setContentView(sv2);
+        }
+    }
+
+    private void addListener() {
+        try {
+            Shizuku.OnRequestPermissionResultListener l =
+                    new Shizuku.OnRequestPermissionResultListener() {
+                        @Override
+                        public void onRequestPermissionResult(int requestCode, int grantResult) {
+                            if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                                print("Permission GRANTED");
+                            } else {
+                                print("Permission DENIED");
+                            }
+                        }
+                    };
+            permListener = l;
+            Shizuku.addRequestPermissionResultListener(l);
         } catch (Throwable t) {
             print("Listener error: " + t);
         }
@@ -84,7 +96,9 @@ public class MainActivity extends Activity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                log.append(s + "\n");
+                if (log != null) {
+                    log.append(s + "\n");
+                }
             }
         });
     }
@@ -148,9 +162,12 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         try {
-            Shizuku.removeRequestPermissionResultListener(permListener);
+            if (permListener != null) {
+                Shizuku.removeRequestPermissionResultListener(
+                        (Shizuku.OnRequestPermissionResultListener) permListener);
+            }
         } catch (Throwable t) {
             // ignore
         }
     }
-                        }
+                }
